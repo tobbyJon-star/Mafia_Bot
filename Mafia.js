@@ -81,7 +81,7 @@ bot.onText(/\/start/, async (msg) => {
             { text: "🚪 Tark etish", callback_data: "leave_game" }
           ],
           [
-            { text: "🚀 O'yinni boshlash (min 4)", callback_data: "force_start" }
+            { text: "🚀 O'yinni boshlash (min 2)", callback_data: "force_start" }
           ],
           [
             { text: "🏆 TOP G'oliblar", callback_data: "show_top" }
@@ -124,14 +124,16 @@ function getLobbyText() {
       text += `${idx + 1}. *${p.name}* (@${p.username || 'user'})\n`;
     });
   }
-  text += `\n📌 O'yin boshlanishi uchun kamida *4 kishi* kerak (maksimal *10 kishi*).`;
+  text += `\n📌 O'yin boshlanishi uchun kamida *2 kishi* kerak (maksimal *10 kishi*).`;
   return text;
 }
 
 function assignRoles() {
   const count = players.length;
-  let baseRoles = ["Mafia", "Doctor", "Detective", "Citizen"];
+  let baseRoles = ["Mafia", "Citizen"];
 
+  if (count >= 3) baseRoles.push("Doctor");
+  if (count >= 4) baseRoles.push("Detective");
   if (count >= 7) baseRoles.push("Mafia");
   if (count >= 9) baseRoles.push("Don");
 
@@ -321,6 +323,9 @@ bot.on('callback_query', async (query) => {
       players.push({ id: userId, name: userName, username: query.from.username });
       await bot.answerCallbackQuery(query.id, { text: "✅ Ro'yxatga qo'shildingiz!" }).catch(() => {});
 
+      // Guruhga xabar yuborish
+      await bot.sendMessage(chatId, `👤 *${userName}* o'yinga qo'shildi! (Jami: ${players.length} ta)`, { parse_mode: 'Markdown' }).catch(() => {});
+
       const updatedText = getLobbyText();
       await bot.editMessageText(updatedText, {
         chat_id: chatId,
@@ -333,7 +338,7 @@ bot.on('callback_query', async (query) => {
               { text: "🚪 Tark etish", callback_data: "leave_game" }
             ],
             [
-              { text: "🚀 O'yinni boshlash (min 4)", callback_data: "force_start" }
+              { text: "🚀 O'yinni boshlash (min 2)", callback_data: "force_start" }
             ],
             [
               { text: "🏆 TOP G'oliblar", callback_data: "show_top" }
@@ -359,6 +364,8 @@ bot.on('callback_query', async (query) => {
       players = players.filter(p => String(p.id) !== String(userId));
       await bot.answerCallbackQuery(query.id, { text: "Ro'yxatdan chiqdingiz." }).catch(() => {});
 
+      await bot.sendMessage(chatId, `🚪 *${userName}* o'yinni tark etdi! (Qoldi: ${players.length} ta)`, { parse_mode: 'Markdown' }).catch(() => {});
+
       const updatedText = getLobbyText();
       await bot.editMessageText(updatedText, {
         chat_id: chatId,
@@ -371,7 +378,7 @@ bot.on('callback_query', async (query) => {
               { text: "🚪 Tark etish", callback_data: "leave_game" }
             ],
             [
-              { text: "🚀 O'yinni boshlash (min 4)", callback_data: "force_start" }
+              { text: "🚀 O'yinni boshlash (min 2)", callback_data: "force_start" }
             ],
             [
               { text: "🏆 TOP G'oliblar", callback_data: "show_top" }
@@ -382,8 +389,8 @@ bot.on('callback_query', async (query) => {
     }
 
     if (data === 'force_start') {
-      if (players.length < 4) {
-        return await bot.answerCallbackQuery(query.id, { text: `Kamida 4 kishi kerak! Hozir: ${players.length} ta`, show_alert: true }).catch(() => {});
+      if (players.length < 2) {
+        return await bot.answerCallbackQuery(query.id, { text: `Kamida 2 kishi kerak! Hozir: ${players.length} ta`, show_alert: true }).catch(() => {});
       }
       if (isGameStarted) return;
 
@@ -459,13 +466,25 @@ bot.on('callback_query', async (query) => {
 
 bot.on('polling_error', (err) => console.error("Polling error:", err.code || err.message));
 
-// Render.com uchun soxta Web Port server
+// Render.com uchun HTTP port va har 5 daqiqada avto-ping
 const PORT = process.env.PORT || 3000;
+const SERVER_URL = process.env.RENDER_EXTERNAL_URL;
+
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Mafia Bot Active\n');
 }).listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
+  
+  setInterval(() => {
+    if (SERVER_URL) {
+      http.get(SERVER_URL, (res) => {
+        console.log(`Auto-ping status: ${res.statusCode}`);
+      }).on('error', (err) => {
+        console.error('Auto-ping error:', err.message);
+      });
+    }
+  }, 5 * 60 * 1000);
 });
 
 console.log("Mafia bot to'liq ishga tushdi!");
