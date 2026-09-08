@@ -1,10 +1,11 @@
 import TelegramBot from 'node-telegram-bot-api';
 import fs from 'fs';
 import path from 'path';
+import http from 'http';
 
-// Server xatolarida bot o'chib qolmasligi uchun tutgich
+// Kutilmagan xatoliklar tufayli bot to'xtab qolmasligi uchun
 process.on('uncaughtException', (err) => {
-  console.error('Kutilmagan xatolik ushlandi:', err);
+  console.error('Kutilmagan xatolik ushlandi:', err.message);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -13,13 +14,11 @@ process.on('unhandledRejection', (reason, promise) => {
 
 process.env.NTBA_FIX_350 = '1';
 
-// Tokeningizni quyida joylang yoki Environment Variable (BOT_TOKEN) dan oling
-const token = process.env.BOT_TOKEN || '8945348177:AAGMWh3LfyBtlDw5jKZHA-rKc1i2Z2iSUkE';
+const token = process.env.BOT_TOKEN || '8945348177:AAFjOm-MEUAXXtaV6qR79Mo_ctvOgx4Qlkg';
 const bot = new TelegramBot(token, { polling: true });
 
 const DATA_FILE = path.resolve('./stats.json');
 
-// Statistikani xatosiz yuklash
 function loadStats() {
   try {
     if (!fs.existsSync(DATA_FILE)) {
@@ -29,46 +28,42 @@ function loadStats() {
     const data = fs.readFileSync(DATA_FILE, 'utf8');
     return JSON.parse(data || '{}');
   } catch (err) {
-    console.error("Fayl o'qishda xatolik:", err);
+    console.error("Fayl o'qishda xatolik:", err.message);
     return {};
   }
 }
 
-// Statistikani saqlash
 function saveStats(stats) {
   try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(stats, null, 2), 'utf8');
   } catch (err) {
-    console.error("Faylga yozishda xatolik:", err);
+    console.error("Faylga yozishda xatolik:", err.message);
   }
 }
 
-// O'yin va ro'yxat o'zgaruvchilari
 let players = [];
 let isGameStarted = false;
 let gamePhase = 'WAITING'; 
 
-let lobbyMessageId = null;
 let roles = {}; 
 let nightActions = { mafiaKill: null, doctorHeal: null, detectiveCheck: null };
 let dayVotes = {}; 
 
-// /start buyrug'i
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
 
   if (msg.chat.type === 'private') {
     return bot.sendMessage(
       chatId,
-      "🕵️‍♂️ **Mafiya Botiga xush kelibsiz!**\n\nMeni guruhga qo'shing va o'yinni boshlash uchun guruhda `/start` bosing."
-    );
+      "🕵️‍♂️ *Mafiya Botiga xush kelibsiz!*\n\nMeni guruhga qo'shing va o'yinni boshlash uchun guruhda `/start` bosing.",
+      { parse_mode: 'Markdown' }
+    ).catch(() => {});
   }
 
   if (isGameStarted) {
-    return bot.sendMessage(chatId, "⚠️ O'yin allaqachon boshlangan!");
+    return bot.sendMessage(chatId, "⚠️ O'yin allaqachon boshlangan!").catch(() => {});
   }
 
-  // Holatni tozalash
   players = [];
   roles = {};
   nightActions = { mafiaKill: null, doctorHeal: null, detectiveCheck: null };
@@ -77,7 +72,7 @@ bot.onText(/\/start/, async (msg) => {
 
   const lobbyText = getLobbyText();
   try {
-    const sentMsg = await bot.sendMessage(chatId, lobbyText, {
+    await bot.sendMessage(chatId, lobbyText, {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
@@ -94,13 +89,11 @@ bot.onText(/\/start/, async (msg) => {
         ]
       }
     });
-    lobbyMessageId = sentMsg.message_id;
   } catch (err) {
-    console.error("Lobby xabarini yuborishda xatolik:", err);
+    console.error("Lobby xabarini yuborishda xatolik:", err.message);
   }
 });
 
-// TOP G'oliblar (/top)
 bot.onText(/\/top/, (msg) => {
   sendTopWinners(msg.chat.id);
 });
@@ -110,28 +103,28 @@ function sendTopWinners(chatId) {
   const sorted = Object.values(stats).sort((a, b) => b.wins - a.wins).slice(0, 10);
 
   if (sorted.length === 0) {
-    return bot.sendMessage(chatId, "🏆 **TOP G'OLIBLAR JADVALI**\n\nHozircha g'oliblar mavjud emas.");
+    return bot.sendMessage(chatId, "🏆 *TOP G'OLIBLAR JADVALI*\n\nHozircha g'oliblar mavjud emas.", { parse_mode: 'Markdown' }).catch(() => {});
   }
 
-  let topText = "🏆 **TOP G'OLIBLAR JADVALI**\n\n";
+  let topText = "🏆 *TOP G'OLIBLAR JADVALI*\n\n";
   sorted.forEach((u, idx) => {
     const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : "👤";
-    topText += `${medal} ${idx + 1}. **${u.name}** (@${u.username || 'user'}) — **${u.wins} ta g'alaba** (${u.games} ta o'yinda)\n`;
+    topText += `${medal} ${idx + 1}. *${u.name}* (@${u.username || 'user'}) — *${u.wins} ta g'alaba* (${u.games} ta o'yinda)\n`;
   });
 
-  bot.sendMessage(chatId, topText, { parse_mode: 'Markdown' }).catch(err => console.error(err));
+  bot.sendMessage(chatId, topText, { parse_mode: 'Markdown' }).catch(err => console.error(err.message));
 }
 
 function getLobbyText() {
-  let text = `🕵️‍♂️ **MAFIA O'YINI RO'YXATI** (${players.length}/10)\n\n`;
+  let text = `🕵️‍♂️ *MAFIA O'YINI RO'YXATI* (${players.length}/10)\n\n`;
   if (players.length === 0) {
     text += "Hozircha hech kim qo'shilmadi.\n";
   } else {
     players.forEach((p, idx) => {
-      text += `${idx + 1}. **${p.name}** (@${p.username || 'user'})\n`;
+      text += `${idx + 1}. *${p.name}* (@${p.username || 'user'})\n`;
     });
   }
-  text += `\n📌 O'yin boshlanishi uchun kamida **4 kishi** kerak (maksimal **10 kishi**).`;
+  text += `\n📌 O'yin boshlanishi uchun kamida *4 kishi* kerak (maksimal *10 kishi*).`;
   return text;
 }
 
@@ -164,9 +157,10 @@ async function startNightPhase(chatId) {
 
   await bot.sendMessage(
     chatId,
-    "🌃 **TUN TUSHDI... SHAHAR UXLAMOQDA.**\n\n" +
-    "Barcha o'yinchilarning shaxsiy xabarlariga (DM) maxfiy buyruqlar yuborildi."
-  ).catch(e => console.error(e));
+    "🌃 *TUN TUSHDI... SHAHAR UXLAMOQDA.*\n\n" +
+    "Barcha o'yinchilarning shaxsiy xabarlariga (DM) maxfiy buyruqlar yuborildi.",
+    { parse_mode: 'Markdown' }
+  ).catch(e => console.error(e.message));
 
   const alivePlayers = players.filter(p => roles[p.id].isAlive);
 
@@ -177,21 +171,22 @@ async function startNightPhase(chatId) {
       .map(target => [{ text: target.name, callback_data: `night_${userRole}_${target.id}` }]);
 
     let roleMsg = "";
-    if (userRole === "Mafia" || userRole === "Don") roleMsg = "🔪 Siz **MAFIYA**siz. Tunda kimni o'ldirmoqchisiz?";
-    else if (userRole === "Doctor") roleMsg = "💉 Siz **SHIFOKOR**siz. Kimni qutqarmoqchisiz?";
-    else if (userRole === "Detective") roleMsg = "🔍 Siz **KOMISSAR**siz. Kimni tekshirmoqchisiz?";
-    else roleMsg = "😴 Siz **TINCH FUQARO**siz. Tun tugashini kuting...";
+    if (userRole === "Mafia" || userRole === "Don") roleMsg = "🔪 Siz *MAFIYA*siz. Tunda kimni o'ldirmoqchisiz?";
+    else if (userRole === "Doctor") roleMsg = "💉 Siz *SHIFOKOR*siz. Kimni qutqarmoqchisiz?";
+    else if (userRole === "Detective") roleMsg = "🔍 Siz *KOMISSAR*siz. Kimni tekshirmoqchisiz?";
+    else roleMsg = "😴 Siz *TINCH FUQARO*siz. Tun tugashini kuting...";
 
     try {
       if (userRole !== "Citizen") {
         await bot.sendMessage(p.id, roleMsg, {
+          parse_mode: 'Markdown',
           reply_markup: { inline_keyboard: targetButtons }
         });
       } else {
-        await bot.sendMessage(p.id, roleMsg);
+        await bot.sendMessage(p.id, roleMsg, { parse_mode: 'Markdown' });
       }
     } catch (e) {
-      bot.sendMessage(chatId, `⚠️ **${p.name}** botga shaxsiyda /start bosmagan!`).catch(() => {});
+      bot.sendMessage(chatId, `⚠️ *${p.name}* botga shaxsiyda /start bosmagan!`, { parse_mode: 'Markdown' }).catch(() => {});
     }
   }
 }
@@ -218,15 +213,15 @@ async function processNightResults(chatId) {
     roles[killedUser].isAlive = false;
   }
 
-  let resultMsg = "☀️ **KUN BOTDI! SHAHAR UYG'ONDI.**\n\n";
+  let resultMsg = "☀️ *KUN BOTDI! SHAHAR UYG'ONDI.*\n\n";
 
   if (killedUser) {
-    resultMsg += `☠️ Tunda Mafiya **${roles[killedUser].name}**ni o'ldirdi! U o'yindan chiqdi.\n`;
+    resultMsg += `☠️ Tunda Mafiya *${roles[killedUser].name}*ni o'ldirdi! U o'yindan chiqdi.\n`;
   } else {
     resultMsg += "🛡 Shifokor a'lo darajada ishladi! Tunda hech kim halok bo'lmadi.\n";
   }
 
-  await bot.sendMessage(chatId, resultMsg).catch(e => console.error(e));
+  await bot.sendMessage(chatId, resultMsg, { parse_mode: 'Markdown' }).catch(e => console.error(e.message));
 
   if (checkWinner(chatId)) return;
 
@@ -244,11 +239,12 @@ async function startDayVoting(chatId) {
 
   await bot.sendMessage(
     chatId,
-    "🗣 **OVOZ BERISH BOSHLANDI!**\n\nSizningcha, kim Mafiya? Tanlang:",
+    "🗣 *OVOZ BERISH BOSHLANDI!*\n\nSizningcha, kim Mafiya? Tanlang:",
     {
+      parse_mode: 'Markdown',
       reply_markup: { inline_keyboard: voteButtons }
     }
-  ).catch(e => console.error(e));
+  ).catch(e => console.error(e.message));
 }
 
 function checkWinner(chatId) {
@@ -257,10 +253,10 @@ function checkWinner(chatId) {
   const aliveCitizens = alivePlayers.filter(p => roles[p.id].role !== 'Mafia' && roles[p.id].role !== 'Don');
 
   if (aliveMafia.length === 0) {
-    finishGame(chatId, "🎉 **TINCH FUQAROLAR G'OLIB BO'LDI!**", "Citizens");
+    finishGame(chatId, "🎉 *TINCH FUQAROLAR G'OLIB BO'LDI!*", "Citizens");
     return true;
   } else if (aliveMafia.length >= aliveCitizens.length) {
-    finishGame(chatId, "🗡 **MAFIYA G'OLIB BO'LDI! Shahar egallandi.**", "Mafia");
+    finishGame(chatId, "🗡 *MAFIYA G'OLIB BO'LDI! Shahar egallandi.*", "Mafia");
     return true;
   }
   return false;
@@ -272,10 +268,10 @@ function finishGame(chatId, winnerAnnouncement, winningTeam) {
 
   const stats = loadStats();
 
-  let summary = `${winnerAnnouncement}\n\n📋 **Barcha o'yinchilar va ularning rollari:**\n`;
+  let summary = `${winnerAnnouncement}\n\n📋 *Barcha o'yinchilar va ularning rollari:*\n`;
   players.forEach((p, idx) => {
     const r = roles[p.id];
-    summary += `${idx + 1}. **${p.name}** (@${p.username || 'user'}) — **${r.role}** ${r.isAlive ? "🟢 (Tirik)" : "🔴 (O'lgan)"}\n`;
+    summary += `${idx + 1}. *${p.name}* (@${p.username || 'user'}) — *${r.role}* ${r.isAlive ? "🟢 (Tirik)" : "🔴 (O'lgan)"}\n`;
 
     if (!stats[p.id]) {
       stats[p.id] = { name: p.name, username: p.username, wins: 0, games: 0 };
@@ -292,12 +288,12 @@ function finishGame(chatId, winnerAnnouncement, winningTeam) {
   });
 
   saveStats(stats);
-  bot.sendMessage(chatId, summary, { parse_mode: 'Markdown' }).catch(e => console.error(e));
+  bot.sendMessage(chatId, summary, { parse_mode: 'Markdown' }).catch(e => console.error(e.message));
 }
 
-// Callback Query Handler
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
+  const messageId = query.message.message_id;
   const userId = query.from.id;
   const userName = query.from.first_name;
   const data = query.data;
@@ -305,21 +301,30 @@ bot.on('callback_query', async (query) => {
   try {
     if (data === 'show_top') {
       sendTopWinners(chatId);
-      return await bot.answerCallbackQuery(query.id);
+      return await bot.answerCallbackQuery(query.id).catch(() => {});
     }
 
     if (data === 'join_game') {
-      if (isGameStarted) return await bot.answerCallbackQuery(query.id, { text: "O'yin boshlanib bo'ldi!", show_alert: true });
-      if (players.some(p => p.id === userId)) return await bot.answerCallbackQuery(query.id, { text: "Siz allaqachon qo'shilgansiz!", show_alert: true });
-      if (players.length >= 10) return await bot.answerCallbackQuery(query.id, { text: "Xona to'ldi! Maksimal 10 kishi.", show_alert: true });
+      if (isGameStarted) {
+        return await bot.answerCallbackQuery(query.id, { text: "O'yin boshlanib bo'ldi!", show_alert: true }).catch(() => {});
+      }
+
+      const isAlreadyJoined = players.some(p => String(p.id) === String(userId));
+      if (isAlreadyJoined) {
+        return await bot.answerCallbackQuery(query.id, { text: "Siz allaqachon ro'yxatdasiz!", show_alert: true }).catch(() => {});
+      }
+
+      if (players.length >= 10) {
+        return await bot.answerCallbackQuery(query.id, { text: "Xona to'ldi! Maksimal 10 kishi.", show_alert: true }).catch(() => {});
+      }
 
       players.push({ id: userId, name: userName, username: query.from.username });
-      await bot.answerCallbackQuery(query.id, { text: "Qo'shildingiz!" });
+      await bot.answerCallbackQuery(query.id, { text: "✅ Ro'yxatga qo'shildingiz!" }).catch(() => {});
 
-      const newText = getLobbyText();
-      await bot.editMessageText(newText, {
+      const updatedText = getLobbyText();
+      await bot.editMessageText(updatedText, {
         chat_id: chatId,
-        message_id: lobbyMessageId,
+        message_id: messageId,
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
@@ -335,26 +340,29 @@ bot.on('callback_query', async (query) => {
             ]
           ]
         }
-      }).catch(() => {});
+      }).catch(err => console.error("Xabarni tahrirlashda xatolik:", err.message));
 
       if (players.length === 10) {
         isGameStarted = true;
         assignRoles();
-        await bot.sendMessage(chatId, "🔥 10 ta o'yinchi yig'ildi! O'yin boshlandi.");
+        await bot.sendMessage(chatId, "🔥 10 ta o'yinchi yig'ildi! O'yin boshlandi.").catch(() => {});
         await startNightPhase(chatId);
       }
     }
 
     if (data === 'leave_game') {
-      if (!players.some(p => p.id === userId)) return await bot.answerCallbackQuery(query.id, { text: "Siz ro'yxatda yo'qsiz!", show_alert: true });
+      const exists = players.some(p => String(p.id) === String(userId));
+      if (!exists) {
+        return await bot.answerCallbackQuery(query.id, { text: "Siz ro'yxatda yo'qsiz!", show_alert: true }).catch(() => {});
+      }
 
-      players = players.filter(p => p.id !== userId);
-      await bot.answerCallbackQuery(query.id, { text: "Ro'yxatdan chiqdingiz." });
+      players = players.filter(p => String(p.id) !== String(userId));
+      await bot.answerCallbackQuery(query.id, { text: "Ro'yxatdan chiqdingiz." }).catch(() => {});
 
-      const newText = getLobbyText();
-      await bot.editMessageText(newText, {
+      const updatedText = getLobbyText();
+      await bot.editMessageText(updatedText, {
         chat_id: chatId,
-        message_id: lobbyMessageId,
+        message_id: messageId,
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
@@ -370,17 +378,19 @@ bot.on('callback_query', async (query) => {
             ]
           ]
         }
-      });
+      }).catch(err => console.error(err.message));
     }
 
     if (data === 'force_start') {
-      if (players.length < 4) return await bot.answerCallbackQuery(query.id, { text: "Kamida 4 kishi kerak!", show_alert: true });
+      if (players.length < 4) {
+        return await bot.answerCallbackQuery(query.id, { text: `Kamida 4 kishi kerak! Hozir: ${players.length} ta`, show_alert: true }).catch(() => {});
+      }
       if (isGameStarted) return;
 
       isGameStarted = true;
       assignRoles();
-      await bot.answerCallbackQuery(query.id);
-      await bot.sendMessage(chatId, "🚀 O'yin boshlandi!");
+      await bot.answerCallbackQuery(query.id).catch(() => {});
+      await bot.sendMessage(chatId, "🚀 O'yin boshlandi!").catch(() => {});
       await startNightPhase(chatId);
     }
 
@@ -394,23 +404,23 @@ bot.on('callback_query', async (query) => {
       if (actionRole === 'Detective') {
         nightActions.detectiveCheck = targetId;
         const isMaf = roles[targetId].role === 'Mafia' || roles[targetId].role === 'Don';
-        await bot.sendMessage(userId, `🔍 Natija: **${roles[targetId].name}** — ${isMaf ? "🗡 MAFIYA!" : "😇 Tinch fuqaro."}`).catch(() => {});
+        await bot.sendMessage(userId, `🔍 Natija: *${roles[targetId].name}* — ${isMaf ? "🗡 MAFIYA!" : "😇 Tinch fuqaro."}`, { parse_mode: 'Markdown' }).catch(() => {});
       }
 
-      await bot.answerCallbackQuery(query.id, { text: "Tanlov saqlandi!" });
+      await bot.answerCallbackQuery(query.id, { text: "Tanlov saqlandi!" }).catch(() => {});
       await bot.sendMessage(userId, "✅ Tanlovingiz saqlandi.").catch(() => {});
 
       checkNightPhaseComplete(chatId);
     }
 
     if (data.startsWith('vote_')) {
-      if (gamePhase !== 'DAY_VOTING') return await bot.answerCallbackQuery(query.id, { text: "Hozir ovoz berish vaqti emas!", show_alert: true });
-      if (!roles[userId] || !roles[userId].isAlive) return await bot.answerCallbackQuery(query.id, { text: "Faqat tiriklar ovoz berishi mumkin!", show_alert: true });
+      if (gamePhase !== 'DAY_VOTING') return await bot.answerCallbackQuery(query.id, { text: "Hozir ovoz berish vaqti emas!", show_alert: true }).catch(() => {});
+      if (!roles[userId] || !roles[userId].isAlive) return await bot.answerCallbackQuery(query.id, { text: "Faqat tiriklar ovoz berishi mumkin!", show_alert: true }).catch(() => {});
 
       const targetId = parseInt(data.split('_')[1]);
       dayVotes[targetId] = (dayVotes[targetId] || 0) + 1;
 
-      await bot.answerCallbackQuery(query.id, { text: "Ovozingiz saqlandi!" });
+      await bot.answerCallbackQuery(query.id, { text: "Ovozingiz saqlandi!" }).catch(() => {});
 
       const aliveCount = players.filter(p => roles[p.id].isAlive).length;
       const totalVotes = Object.values(dayVotes).reduce((a, b) => a + b, 0);
@@ -430,10 +440,11 @@ bot.on('callback_query', async (query) => {
           roles[executedUser].isAlive = false;
           await bot.sendMessage(
             chatId,
-            `⚖️ **OVOZ BERISH YAKUNLANDI!**\n\n` +
-            `A'zolar qaroriga ko'ra **${roles[executedUser].name}** qatl qilindi!\n` +
-            `Uning roli: **${roles[executedUser].role}** edi.`
-          ).catch(e => console.error(e));
+            `⚖️ *OVOZ BERISH YAKUNLANDI!*\n\n` +
+            `A'zolar qaroriga ko'ra *${roles[executedUser].name}* qatl qilindi!\n` +
+            `Uning roli: *${roles[executedUser].role}* edi.`,
+            { parse_mode: 'Markdown' }
+          ).catch(e => console.error(e.message));
         }
 
         if (!checkWinner(chatId)) {
@@ -442,10 +453,19 @@ bot.on('callback_query', async (query) => {
       }
     }
   } catch (err) {
-    console.error("Callback xatoligi:", err);
+    console.error("Callback asosiy xatoligi:", err.message);
   }
 });
 
-bot.on('polling_error', (err) => console.error("Polling error:", err.code));
+bot.on('polling_error', (err) => console.error("Polling error:", err.code || err.message));
 
-console.log("Mafia bot serverga joylash uchun to'liq tayyor!");
+// Render.com uchun soxta Web Port server
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Mafia Bot Active\n');
+}).listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
+});
+
+console.log("Mafia bot to'liq ishga tushdi!");
